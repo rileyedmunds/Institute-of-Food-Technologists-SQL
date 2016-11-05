@@ -1,0 +1,47 @@
+USE PPRO
+
+--Anyone who joined as a MEM/MEMNEW in the past 10 years
+select 
+	orig.SHIP_MASTER_CUSTOMER_ID MCID,
+	orig.SHIP_FIRST_NAME,
+	orig.SHIP_LAST_NAME,
+	orig.SHIP_LABEL_NAME,
+	orig.SHIP_COMPANY_NAME,
+	orig.SHIP_PRIMARY_EMAIL_ADDRESS,
+	orig.MBR_PRODUCT_LEVEL1,
+	orig.MBR_PRODUCT_LEVEL2,
+	section.DESCR,
+	max(orig.CYCLE_END_DATE) MOST_RECENT_CYCLE_END_DATE,
+	orig.INITIAL_BEGIN_DATE,
+	max(c.USR_YEARSINFOOD) USR_YEARSINFOOD,
+	(CASE WHEN orig.SHIP_MASTER_CUSTOMER_ID in (select distinct SHIP_MASTER_CUSTOMER_ID from ORDER_DETAIL o where o.SUBSYSTEM = 'MTG' and o.PRODUCT_CODE = 'IFT2016' and LINE_STATUS_CODE = 'A') THEN 'Y' ELSE 'N' END) RegisteredIFT16,
+	'MTG' as SUBSYSTEM,
+	'IFT2016' as PRODUCT_CODE
+from IFT_ODM_VW orig with (nolock)
+	--to get most updated info
+	inner join 
+	(select SHIP_MASTER_CUSTOMER_ID, MAX(CYCLE_END_DATE) CYCLE_END_DATE from IFT_ODM_VW where MBR_PRODUCT_LEVEL1 = 'NATL' and LINE_STATUS_CODE = 'A'
+	group by SHIP_MASTER_CUSTOMER_ID) recents on recents.SHIP_MASTER_CUSTOMER_ID = orig.SHIP_MASTER_CUSTOMER_ID and recents.CYCLE_END_DATE = orig.CYCLE_END_DATE
+	left join CUSTOMER c with (nolock) on c.MASTER_CUSTOMER_ID = orig.SHIP_MASTER_CUSTOMER_ID
+	--Add in the home section descriptions:
+	left join IFT_CUS_ADDRESS_WITH_HOME_SECTION_VW addr on addr.MASTER_CUSTOMER_ID = orig.SHIP_MASTER_CUSTOMER_ID and addr.CUS_ADDRESS_ID = orig.SHIP_ADDRESS_ID
+	left join MBR_PRODUCT section on section.PRODUCT_ID = addr.Home_Section_Product_Id
+where 
+	orig.MBR_PRODUCT_LEVEL1 = 'NATL'
+	and orig.SHIP_MASTER_CUSTOMER_ID in (select distinct ol.SHIP_MASTER_CUSTOMER_ID from IFT_ODM_VW ol where (ol.CYCLE_BEGIN_DATE > DATEADD(yy, -10, GETDATE()) and (ol.MBR_PRODUCT_LEVEL2 = 'NEW' or ol.MBR_PRODUCT_LEVEL3 = 'NEW') and ol.LINE_STATUS_CODE = 'A'))
+	and orig.LINE_STATUS_CODE = 'A'
+group by orig.SHIP_MASTER_CUSTOMER_ID,
+	orig.SHIP_FIRST_NAME,
+	orig.SHIP_LAST_NAME,
+	orig.SHIP_LABEL_NAME,
+	orig.SHIP_COMPANY_NAME,
+	orig.SHIP_PRIMARY_EMAIL_ADDRESS,
+	orig.MBR_PRODUCT_LEVEL1,
+	orig.MBR_PRODUCT_LEVEL2,
+	section.DESCR,
+	orig.INITIAL_BEGIN_DATE,
+	c.USR_YEARSINFOOD,
+	orig.RATE_CODE,
+	orig.RATE_STRUCTURE,
+	orig.SUBSYSTEM,
+	orig.PRODUCT_CODE
